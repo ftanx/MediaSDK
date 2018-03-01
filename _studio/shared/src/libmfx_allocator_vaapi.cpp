@@ -42,6 +42,10 @@
 #define VASurfaceAttribUsageHint 8
 #define VAEncMacroblockMapBufferType 29
 
+#define VA_FOURCC(ch0, ch1, ch2, ch3) \
+    ((unsigned long)(unsigned char) (ch0) | ((unsigned long)(unsigned char) (ch1) << 8) | \
+    ((unsigned long)(unsigned char) (ch2) << 16) | ((unsigned long)(unsigned char) (ch3) << 24 ))
+#define VA_FOURCC_R5G6B5 VA_FOURCC('R','G','1','6')
 
 unsigned int ConvertMfxFourccToVAFormat(mfxU32 fourcc)
 {
@@ -53,6 +57,10 @@ unsigned int ConvertMfxFourccToVAFormat(mfxU32 fourcc)
         return VA_FOURCC_YUY2;
     case MFX_FOURCC_YV12:
         return VA_FOURCC_YV12;
+#if (MFX_VERSION >= MFX_VERSION_NEXT)
+    case MFX_FOURCC_RGB565:
+        return VA_FOURCC_R5G6B5;
+#endif
     case MFX_FOURCC_RGB4:
         return VA_FOURCC_ARGB;
     case MFX_FOURCC_BGR4:
@@ -95,14 +103,15 @@ mfxDefaultAllocatorVAAPI::AllocFramesHW(
 
     mfxU32 mfx_fourcc = fourcc;
     va_fourcc = ConvertMfxFourccToVAFormat(mfx_fourcc);
-    if (!va_fourcc || ((VA_FOURCC_NV12 != va_fourcc) &&
-                       (VA_FOURCC_YV12 != va_fourcc) &&
-                       (VA_FOURCC_YUY2 != va_fourcc) &&
-                       (VA_FOURCC_ARGB != va_fourcc) &&
-                       (VA_FOURCC_ABGR != va_fourcc) &&
-                       (VA_FOURCC_UYVY != va_fourcc) &&
-                       (VA_FOURCC_P208 != va_fourcc) &&
-                       (VA_FOURCC_P010 != va_fourcc)))
+    if (!va_fourcc || ((VA_FOURCC_NV12   != va_fourcc) &&
+                       (VA_FOURCC_YV12   != va_fourcc) &&
+                       (VA_FOURCC_YUY2   != va_fourcc) &&
+                       (VA_FOURCC_ARGB   != va_fourcc) &&
+                       (VA_FOURCC_ABGR   != va_fourcc) &&
+                       (VA_FOURCC_UYVY   != va_fourcc) &&
+                       (VA_FOURCC_P208   != va_fourcc) &&
+                       (VA_FOURCC_P010   != va_fourcc) &&
+                       (VA_FOURCC_R5G6B5 != va_fourcc)))
     {
         return MFX_ERR_MEMORY_ALLOC;
     }
@@ -353,6 +362,17 @@ mfxStatus mfxDefaultAllocatorVAAPI::SetFrameData(const VAImage &va_image, mfxU32
             ptr->U = pBuffer + va_image.offsets[0];
             ptr->Y = ptr->U + 1;
             ptr->V = ptr->U + 2;
+        }
+        else mfx_res = MFX_ERR_LOCK_MEMORY;
+        break;
+    case VA_FOURCC_R5G6B5: // TODO: complete implementation
+        if (mfx_fourcc == MFX_FOURCC_RGB565)
+        {
+            ptr->PitchHigh = (mfxU16)(va_image.pitches[0] / (1 << 16));
+            ptr->PitchLow  = (mfxU16)(va_image.pitches[0] % (1 << 16));
+            ptr->B = pBuffer + va_image.offsets[0];
+            ptr->G = ptr->B;
+            ptr->R = ptr->B + 1;
         }
         else mfx_res = MFX_ERR_LOCK_MEMORY;
         break;
